@@ -1,0 +1,285 @@
+package com.medialets.util.datasource;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+import com.medialets.util.SQLPropertiesReader;
+
+
+ 
+ 
+/**
+ * This class is used in parsing CSV files. It defines the mappings among field names, 
+ * field data types, and column indices.
+ * 
+ * The field type dict is initialized from a table of field names to field types. If
+ * a csv file is used, the index is implicit in the row order. This is not a valid
+ * assumption in SQL even though it often happens to work.  If one is loading from sql, 
+ * the data-type column must be of the form index,data-type. The index will be
+ * explicitly extracted when the data is read.
+ * 
+ * Unlike the DD, separate methods are called for the two init types.
+ * 
+ *   
+ * 
+ * @author peterc
+ *
+ */
+public class FieldTypeDict { 
+	private static Logger log = Logger.getLogger(FieldTypeDict.class.getName());
+	 private Map<String,FieldType> nameToType = new ConcurrentHashMap<String,FieldType>();
+	 private List<FieldType>indexToType = new ArrayList<FieldType>();
+	 private Map<String,Integer> nameToIndex = new ConcurrentHashMap<String,Integer>();
+	 
+	 public FieldTypeDict(){
+		 
+	 }
+	 
+	 /** constructor takes path to csv description, calls existing initFromFile method
+	  * this is the standard way of creating a new FieldTypeDict object
+	  * @param fileNamePath
+	  */
+	 public FieldTypeDict(String fileNamePath){
+		 try {
+			this.initFromFile(fileNamePath);
+		} catch (Exception e) {
+			log.error("Problem instantiating FieldTypeDict: " + e.getLocalizedMessage());
+			e.printStackTrace();
+		}
+	 }
+	 
+	 /** static factory method
+	  * 
+	  * @param fileNamePath
+	  * @return new FieldTypeDict
+	  */
+	 public static FieldTypeDict fieldTypeDictFactory(String fileNamePath){
+		 return new FieldTypeDict(fileNamePath);
+	 }
+	 
+	 /**
+	  * Initialize the mappings with twin lists or field names and field types.
+	  * Order of the fields and types must be the same as in the CSV row.
+	  * @param fields
+	  * @param types
+	  * @throws Exception
+	  */
+	 public void addAllPairs(List<String> fields, List<String> types ) throws Exception{
+		 if(fields.size()!=types.size()){
+			 String err = "Mismatch in field count and corresponding type count.";
+			 throw new Exception(err);
+		 }
+		 for(int i=0;i<fields.size(); i++){
+			 addPair(fields.get(i), types.get(i));
+		 }
+	 }
+	 
+	 /**
+	  * Initialize the mappings one at a time. Note, this is computing indices into the
+	  * delimited string, so order matters. Uses the enumerated list of type.
+	  * 
+	  * @param fieldName Any reasonable field name without spaces
+	  * @param type A enumerated FieldType value.
+	  */
+	 public void addPair(String fieldName, FieldType type){
+		 nameToType.put(fieldName,type);
+		 indexToType.add(type);
+		 nameToIndex.put(fieldName,indexToType.size()-1);
+	 }
+	 
+	 /**
+	  * Initialize the mappings one at a time. Note, this is computing indices into the
+	  * delimited string, so order matters. Uses the name of the type, like "STRING" rather
+	  * than FieldType.STRING, which is an enum.
+	  * 
+	  * @param fieldName Any reasonable field name without spaces
+	  * @param type A string representation of a field type (which must exist in FieldType enum.
+	  */
+	 public void addPair(String fieldName, String type) throws Exception {
+		 FieldType t = FieldType.fromString(type);
+		 addPair(fieldName,t);
+	 } 
+	 
+	 /**
+	  * Assumes a comma-delimited, newline-terminated input file with two columns
+	  * representing fields and their types.
+	  * The row index is the implicit index of th
+	  * @param filename
+	  * @throws Exception
+	  */
+	 public void initFromFile(String filename) throws Exception {
+		 File f = new File(filename);
+		 BufferedReader reader = new BufferedReader( new FileReader(f));
+		 String in;
+		 while((in=reader.readLine())!=null){
+			 StringTokenizer st = new StringTokenizer(in,",");
+			 while(st.hasMoreElements()){
+				 String fTok;
+				 String vTok;
+				 fTok = st.nextToken();
+				 fTok=fTok.trim();
+				 if(!st.hasMoreElements()){
+					 String err = "Failure of parity between fields and values in row definition file:" +
+					 	filename;
+					 throw new Exception(err);
+				 }
+				 vTok = st.nextToken();
+				 vTok=vTok.trim();
+				 addPair(fTok,vTok);
+			 }
+		 }
+	 }
+	  
+	 /**
+	  * Properties reader only handles key/value pairs. Column order, however, is
+	  * implicit in the row order of a field-def CSV file. This happens to work 
+	  * in MySQL if the rows are loaded in order, but this is not specified 
+	  * behavior of SQL. 
+	  * 
+	  * Note, the problem is hacked here by explicitly tacking the row index onto the value and 
+	  * then parsing it out here. They are then sorted on the index.
+	  *  
+	  */
+	 public void initFromSQL(String pairSetName) throws Exception { 
+			SQLPropertiesReader sqlpr = new SQLPropertiesReader();
+			List<String> list = sqlpr.fetchKeysFor(pairSetName);
+			sqlpr.fetchPropsFor(pairSetName);
+			String[][] correctOrder = new String[list.size()][2];
+			
+			for(String key : list){
+				String val = sqlpr.getStringProperty(key, null, Level.ERROR, true);
+				int valIndex = val.indexOf(",");
+				int index = Integer.parseInt(val.substring(0, valIndex).trim());
+				val = val.substring(valIndex+1).trim();
+				correctOrder[index][0]=key;
+				correctOrder[index][1]=val;
+			}
+			for(int i=0; i<correctOrder.length; i++){
+				String key = correctOrder[i][0];
+				String val = correctOrder[i][1];
+				System.out.println("Field def pair:" + key + ", " + val);
+				addPair(key,val);
+			}
+	 }
+	
+	 
+	 
+	 /**
+	  * Return the type of the named field or throw and exception.
+	  * @param name
+	  * @return
+	  * @throws Exception
+	  */
+	 public FieldType getType(String name) throws Exception {
+		 if(!nameToType.containsKey(name)){
+			 String err = "Unknown field name---something is off.";
+			 throw new Exception(err);
+		 }
+		 return nameToType.get(name);
+	 }
+	 
+	 public FieldType getType(Integer index){
+		 return indexToType.get(index);
+	 }
+	 
+	 public Integer getIndex(String name){
+		 return nameToIndex.get(name) ;
+	 }
+	 
+	 
+	 public Set getFieldNames(){
+		 return nameToType.keySet();
+	 }
+
+//	 /// BELOW HERE IS ALL DATABASE RELATED.
+//	 
+//		/**
+//		 * A JDBC Connection. We don't worry about opening and closing connections
+//		 * for single units of work because there are seldom very many properties.
+//		 */
+//		private Connection conn;
+//
+//		private List<String> getTheKeys(String appname){ 
+//			createConnection();
+//			List<String> list = sqlpr.fetchKeysFor(appname);
+//			closeConnection();
+//		}
+//		
+//	 /**
+//		 * Create a database connection with instance scope.
+//		 * @throws Exception
+//		 */
+//		private void createConnection() throws Exception {
+//			Class.forName(driverName).newInstance();
+//			conn = DriverManager.getConnection(connectionUrl, uname, password);
+//		}
+//		/**
+//		 * Close the currently active database connection. It is an error to close a 
+//		 * closed or nonexistent connection.
+//		 * @throws Exception
+//		 */
+//		private void closeConnection() throws Exception {
+//			conn.close();
+//		}
+//
+//		/**
+//		 * Execute a query that returns a result set.
+//		 * @param stmt
+//		 * @return
+//		 * @throws Exception
+//		 */
+//		private ResultSet executeQuery(String stmt) throws Exception {
+//			Statement st = conn.createStatement();
+//			ResultSet rs = st.executeQuery(stmt);
+//			return rs;
+//		}
+	 
+	 
+		private String driverName = "com.mysql.jdbc.Driver";
+		private String connectionUrl = "jdbc:mysql://localhost:3306/Medialets";
+		private String uname = "root";
+		private String password = "";
+
+		public String getDriverName() {
+			return driverName;
+		}
+
+		public void setDriverName(String driverName) {
+			this.driverName = driverName;
+		}
+
+		public String getConnectionUrl() {
+			return connectionUrl;
+		}
+
+		public void setConnectionUrl(String connectionUrl) {
+			this.connectionUrl = connectionUrl;
+		}
+
+		public String getUname() {
+			return uname;
+		}
+
+		public void setUname(String uname) {
+			this.uname = uname;
+		}
+
+		public String getPassword() {
+			return password;
+		}
+
+		public void setPassword(String password) {
+			this.password = password;
+		}
+
+}

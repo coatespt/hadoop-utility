@@ -1,0 +1,156 @@
+package com.medialets.util;
+
+//import org.apache.commons.lang.NotImplementedException;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+/**
+ * This class is intended to encapsulate multiple ways to obtain application configuration. The initial
+ * way to get properties is the PropertiesReader. Second will be an SQLPropertiesReader. Each takes 
+ * a major heading as its main parameter. For PropertiesReader, this is he property file's path/name.
+ * For the SQLPropertiesReader, it is the name of application instance in question.  Just as all the 
+ * properties for application X will be stored under a properties file with a well known name and/or location
+ * that is specific to X, in the db they will have an external that fills this same function.
+ * 
+ * @author peterc
+ *
+ */
+public abstract class Configuration extends SQLParent {
+	private static Logger log = Logger.getLogger(Configuration.class.getName()); 
+	private Logger failureLogger;
+	protected String propSrc;
+	
+	
+	public String getTableName(){
+		try {
+			throw new Exception();
+		} catch (Exception e) {
+			// 
+			e.printStackTrace();
+		}
+		return null;
+	}
+	public void setTableName(String s){
+		try {
+			throw new Exception();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	/**
+	 * Get the logger that will be written to
+	 * @return
+	 */
+	public Logger getFailureLogger() {
+		return failureLogger;
+	}
+
+	/**
+	 * Set the logger to write to.
+	 * @param failureLogger
+	 */
+	public void setFailureLogger(Logger failureLogger) {
+		this.failureLogger = failureLogger;
+	}
+
+	/**
+	 * Called to exercise the correct failure path. If the logger for the caller is null,
+	 * then the local logger will be called.
+	 * 
+	 * @param level Level for logging 
+	 * @param err The error message 
+	 * @param exception Should an exception be thrown
+	 * @throws Exception If logging itself fails
+	 */
+	protected void logChoice(Level level, String err, boolean exception) throws Exception {
+		if(getFailureLogger()!=null){
+			getFailureLogger().log(level,err);
+		}
+		else{
+			log.log(level,err);
+		} 
+		if(exception){
+			throw new Exception(err);
+		}
+	}
+	 
+	
+	/**
+	 * Get an Integer property.
+	 * @param property The property name in the properteis file
+	 * @param defaultValue A value to return if it is not found or is corrupt
+	 * @param level The level at which to log failure to find or corrupt value
+	 * @param exception Should an exception be thrown upon failure to find?
+	 * @return The value
+	 * @throws Exception
+	 */
+	public abstract Integer getIntProperty(String property, int defaultValue, Level level, boolean exception ) throws Exception;
+	
+	/**
+	 * Get a Double property.
+	 * @param property The property name in the properteis file
+	 * @param defaultValue A value to return if it is not found or is corrupt
+	 * @param level The level at which to log failure to find or corrupt value
+	 * @param exception Should an exception be thrown upon failure to find?
+	 * @return The value
+	 * @throws Exception
+	 */
+	public abstract Double getDoubleProperty(String property, double defaultValue, Level level, boolean exception ) throws Exception;
+	
+	/**
+	 * Get an String configuration value.
+	 * @param property The key for looking up the value
+	 * @param defaultValue A value to return if it is not found or is corrupt
+	 * @param level The level at which to log failure to find or corrupt value
+	 * @param exception Should an exception be thrown upon failure to find?
+	 * @return The value
+	 * @throws Exception
+	 */
+	public abstract String getStringProperty(String property, String defaultValue, Level level, boolean exception ) throws Exception;
+	
+	/**
+	 * get a long property value
+	 * @param property
+	 * @param defaultValue
+	 * @param level
+	 * @param exception
+	 * @return
+	 * @throws Exception
+	 */
+	public abstract Long getLongProperty(String property, Long defaultValue,Level level, boolean exception) throws Exception;
+	
+	/**
+	 * Get a boolean property value
+	 * @param property
+	 * @param defaultValue
+	 * @param level
+	 * @param exception
+	 * @return
+	 * @throws Exception
+	 */
+	public abstract Boolean getBooleanProperty(String property, Boolean defaultValue,Level level, boolean exception) throws Exception;
+	/**
+	 * Must be called after Configuraion is given its starting parameters, e.g., for properties, the pathname of
+	 * a file. For SQL the startup url, etc.
+	 * @throws Exception
+	 */
+	public abstract void init() throws Exception;
+
+	/**
+	 * Properties file can be set manually---init() must be calle.d
+	 * @param srcname
+	 */
+	public void setPropSrcName(String srcname) {
+		this.propSrc = srcname;
+	}
+
+	/**
+	 * props file can be used directly if required 
+	 * @return
+	 */
+	public String getPropSrcName() {
+		return propSrc;
+	}
+	
+	 
+}

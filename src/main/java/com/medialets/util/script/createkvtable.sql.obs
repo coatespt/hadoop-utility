@@ -1,0 +1,2 @@
+use medialets;
+ CREATE TABLE app_kv (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,appkey VARCHAR(256), pkey VARCHAR(256),pvalue VARCHAR(256));

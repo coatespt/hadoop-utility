@@ -1,0 +1,118 @@
+package com.medialets.util.datasource;
+
+import java.util.ArrayList;
+import java.util.List;
+
+
+import com.medialets.exception.NoValidKeyFieldsException;
+
+/**
+ * A pass through this program aggregates against a key that is a function
+ * of one or more fields. This object holds the names of those fields and
+ * their indices.
+ * 
+ * This class will also return a single key the value of which is a function of
+ * all the keys named herein. The implementation of this may vary in subclasses. The
+ * default is just a concatenation of the String interpretation of the keys
+ * separated by underscores for readability.
+ * 
+ * Aggregations using very bulky fields might, for instance, want to make the synthetic key an SHA-1
+ * or similar hash to save space.
+ * 
+ * Note that there is no Row object referenced except in the getSyntheticKey() method. 
+ * Like a Row, should only be instantiated once, and the used over and over. 
+ * 
+ * @author peterc
+ *
+ */
+public class ComplexKey {
+	private List<String> keyFields = new ArrayList<String>();
+	private List<Integer> keyIndices = new ArrayList<Integer>(); 
+	private FieldTypeDict fieldsDict;
+	
+	
+	
+	/**
+	 * @param keyFields
+	 * @param fieldsDict
+	 */
+	public ComplexKey(List<String> keyFields, FieldTypeDict fieldsDict) {
+		this.keyFields = keyFields;
+		this.fieldsDict = fieldsDict;
+		List<String>keysCopy = new ArrayList<String>(this.keyFields);
+		synchronized (keysCopy){
+			for (String key : keysCopy) {
+				this.addField(key, fieldsDict);
+			}
+		}
+		
+	}
+
+	public ComplexKey() {
+		
+	}
+
+	public void addField(String fieldName, FieldTypeDict fd){
+		keyFields.add(fieldName.trim());
+		keyIndices.add(fd.getIndex(fieldName));
+	}
+	
+	String KEY_SPACER="__";
+	
+	/** 
+	 * Compute a key from the given row based on the list of key fields.
+	 * 
+	 * @param row A Row object
+	 * @return An object suitable for use as an aggregation key
+	 * @throws Exception Thrown if there are no values to create from.
+	 */
+	public Object getSyntheticKey(Row row) throws NoValidKeyFieldsException, Exception{
+		StringBuffer sb = new StringBuffer();
+		sb.append(KEY_SPACER);
+		boolean allNull = true;
+		for(int i=0; i<keyFields.size(); i++){ 
+			String fieldName = keyFields.get(i);
+			Object ob = row.getValue(fieldName);
+			if(ob==null){
+				sb.append("null");
+			}
+			else {
+				allNull=false;
+				sb.append(ob.toString());
+			}
+			sb.append(KEY_SPACER);
+		}
+		if(allNull){
+			String err = "No non-null key fields";
+			throw new NoValidKeyFieldsException(err);
+		}
+		return sb.toString();
+	}
+	
+	public String toString(){
+		StringBuffer sb = new StringBuffer();
+		sb.append("ComplexKey:[");
+		int numFields = keyFields.size();
+		for(String key : keyFields){
+			sb.append(key);
+			if(--numFields>0){
+				sb.append(", ");
+			}
+		}
+		sb.append("]");
+		return sb.toString();
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

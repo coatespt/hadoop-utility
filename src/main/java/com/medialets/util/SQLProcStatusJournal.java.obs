@@ -1,0 +1,113 @@
+package com.medialets.util;
+
+import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+
+public class SQLProcStatusJournal extends SQLParent {
+	
+	private static Logger log = Logger.getLogger(Configuration.class.getName());
+	
+	private String tableName = "app_filelist";
+	public String getTableName() {
+		return tableName;
+	}
+
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+	/**
+	 * Fetch and return the set of processed files.
+	 * @param key
+	 */
+	public List<String> fetchFileWritesFor(String propSet) throws Exception { 
+		createConnection();
+		List<String> list = new ArrayList<String>();
+		String query = "SELECT filename FROM "+ getTableName()+" where appkey='" + propSet + "'";
+		ResultSet rs = executeQuery(query);
+		System.out.println();
+		while (rs.next()) { 
+			String fname = rs.getString("filename"); 
+			if(fname==null | fname.trim().equals("")){
+				continue;
+			}
+			System.out.println("\tFound propset:"+ propSet + " filename:" + fname);
+			list.add(fname);
+		}
+		System.out.println();
+		closeConnection();
+		return list;
+	}
+	
+	/**
+	 * Fetch and return the set of processed files.
+	 * @param key
+	 */
+	public List<String> fetchFileWritesFor(String propSet,Date date) throws Exception { 
+		createConnection();
+		SimpleDateFormat formatter = new SimpleDateFormat(format);
+		String dateStr = formatter.format(date); 
+		List<String> list = new ArrayList<String>();
+		String query = "SELECT filename FROM "+ getTableName()+" where appkey='" + propSet + "' and written >= '" + dateStr + "'";
+		ResultSet rs = executeQuery(query);
+		System.out.println();
+		while (rs.next()) { 
+			String fname = rs.getString("filename"); 
+			if(fname==null | fname.trim().equals("")){
+				continue;
+			}
+			System.out.println("\tFound propset:"+ propSet + " filename:" + fname);
+			list.add(fname);
+		}
+		System.out.println();
+		closeConnection();
+		return list;
+	}
+
+	/**
+	 * Delete a value from one properties set. This is called before insert.
+	 * 
+	 * @param propSet
+	 * @param prop
+	 * @throws Exception
+	 */
+	public void delete(String propSet, String filename) throws Exception {
+		createConnection();
+		String stmt = "delete from "+getTableName()+" where appkey='"+propSet+"' and filename='" + filename
+				+ "'";
+		System.out.println("stmt:" + stmt);
+		int ops = executeUpdate(stmt);
+		if (ops != 0 && ops != 1) {
+			log.warn("parameter insert found multiple copies of " + filename
+					+ " in " + propSet + ". Copy count:" + ops);
+		}
+		closeConnection();
+	}
+
+	/**
+	 * Insert a single filename entry into the db for one application.
+	 * 
+	 * @param app
+	 * @param prop
+	 * @param value
+	 */
+	public void insert(String appKey, String fileName) throws Exception {
+		delete(appKey, fileName);
+		createConnection(); 
+		SimpleDateFormat formatter = new SimpleDateFormat(format);
+		String dateStr = formatter.format(new java.util.Date()); 
+		String stmt = "INSERT INTO " + getTableName() + " VALUES (0,'" + appKey + "', '"
+				+ fileName + "', '"+dateStr+"')";
+		System.out.println("stmt:" + stmt);
+		int ops = executeUpdate(stmt);
+		if (ops != 1) {
+			throw new Exception("Failed to insert a value!");
+		}
+		closeConnection();
+	}
+ 
+}

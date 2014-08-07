@@ -1,0 +1,44 @@
+package com.medialets.util.datasource;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public enum FieldType {
+	INTEGER ("INTEGER"),
+	LONG ("LONG"),
+	DOUBLE ("DOUBLE"),
+	STRING ("STRING"),
+	BOOLEAN ("BOOLEAN"),
+	DATE ("DATE");
+	
+	private final String spelling;
+	
+	private FieldType(String s){
+		spelling=s;
+	}
+	
+	public String toString(){
+		return spelling;
+	}
+	
+	private static Map<String,FieldType> map = null;
+	
+	public static FieldType fromString(String s) throws Exception {
+		if(map==null){
+			map=new HashMap<String,FieldType>();
+			map.put("INTEGER",INTEGER);
+			map.put("DOUBLE", DOUBLE);
+			map.put("STRING", STRING);
+			map.put("BOOLEAN", BOOLEAN);
+			map.put("LONG", LONG);
+			map.put("DATE", DATE);
+		}
+		if(s==null){
+			throw new Exception("Field type correspondign to null requested");
+		}
+		if(!s.contains(s)){
+			throw new Exception("No such FieldType exists in enum. type:" + s);
+		}
+		return map.get(s.toUpperCase());
+	}
+}

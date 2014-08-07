@@ -1,0 +1,45 @@
+/**
+ * 
+ */
+package com.medialets.util;
+
+import org.apache.log4j.Logger;
+
+/**
+ * @author bill
+ * this class purpose is to provide logging of sql to a dedicated log4j appender, independent of appenders used primarily by the dependent apps
+ * ie; set up a separate appender using RollingFileAppender, and set layout to SimpleLayout and assign that appender to this class
+ * in the applications log4j properties, set this class to use that appender with a debug level.
+ */
+public class MMSQLLogger {
+	
+	static private org.apache.log4j.Logger log = Logger.getLogger(MMSQLLogger.class
+			.getName());
+	
+	private static MMSQLLogger singleInstance;
+	
+	private MMSQLLogger (){
+		
+	}
+	
+	public static MMSQLLogger getSingleInstance(){
+		return (singleInstance != null)? singleInstance : new MMSQLLogger();
+	}
+	
+	/**
+	 * 
+	 * @param appID
+	 * @param pk
+	 * @param releaseDate
+	 * @param versionKey
+	 */
+	public void logNewClientAppVersion(int appID, int pk, String releaseDate, String versionKey){
+		String insertString = "insert into ClientAppVersion (clientAppID, id, releaseDate, versionKey, shouldRecieveDefaultAdControl) values (" + appID +", " + pk + ", '" + releaseDate +"', '" + versionKey + "', true);";
+		log.debug(insertString);
+	}
+	
+	public void logRawQueryString(String query){
+		
+	}
+
+}

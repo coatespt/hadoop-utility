@@ -1,0 +1,451 @@
+package com.medialets.util;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Similar interface to a plain properties reader, except that it goes at the
+ * database. The data in the DB is stored under a table of the form
+ * APP_INSTANCE, PROP_NAME, PROP_VALUE (as a string regardless of type).
+ * 
+ * Sets of K/V pairs are stored under an application instance name, such as
+ * DAR_1. This lets you configure any number of instances, e.g., for striping
+ * data, or batch deduplicating in segments.
+ * 
+ * The getXProperty methods are all the same. Additional methods are provided
+ * for doing the initial fetch of all pairs for a given application, inserting
+ * individual properties, clearing an entire application by name, etc.
+ * 
+ * The same SQLPropertiesReader can be initialized again and again for different
+ * sets of properties.
+ * Ä
+ * In general, an exception is thrown if anything goes wrong.
+ * 
+ * The getXProperty() methods do the specific conversions.
+ * 
+ * There are reasonable defaults for driver, connection url, etc., for test purposes. 
+ * In an actual application, these should be explicitly set of course.
+ * 
+ * @author peterc
+ * 
+ */
+public class SQLPropertiesReader extends Configuration {
+	private static Logger log = Logger.getLogger(Configuration.class.getName());
+	protected String tableName = "app_kv";
+	public String getTableName() {
+		return tableName;
+	}
+
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+	
+	@Override
+	public Double getDoubleProperty(String property, double defaultValue,
+			Level level, boolean exception) throws Exception {
+		String s = kvPairs.get(property);
+		double val = defaultValue;
+		if (s == null) {
+			String err = "Double property:[" + property + "] was not found";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		try {
+			val = Double.parseDouble(s);
+		} catch (NumberFormatException nfx) {
+			String err = "property:" + property + " bad double value:[" + s
+					+ "] could not parse as double";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		String logline = "\n\tproperty:" + property + " from:["
+				+ propertySetName + "] set to:[" + val + "]";
+		log.info("\n\t" + logline);
+		return val;
+	}
+
+	@Override
+	public Integer getIntProperty(String property, int defaultValue,
+			Level level, boolean exception) throws Exception {
+		String s = kvPairs.get(property);
+		int val = defaultValue;
+		if (s == null) {
+			String err = "Integer property:[" + property + "] was not found";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		try {
+			val = Integer.parseInt(s);
+		} catch (NumberFormatException nfx) {
+			String err = "property:" + property + " bad integer value:[" + s
+					+ "] could not parse as integer";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		String logline = "\n\tproperty:" + property + " from:["
+				+ propertySetName + "] set to:[" + val + "]";
+		log.info("\n\t" + logline);
+		return val;
+	}
+
+	@Override
+	public String getStringProperty(String property, String defaultValue,
+			Level level, boolean exception) throws Exception {
+		String s = kvPairs.get(property);
+		String val = s == null ? defaultValue : s.trim();
+		if (s == null) {
+			String err = "String property:[" + property + "] was not found";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		;
+		String logline = "\n\tproperty:" + property + " from:["
+				+ propertySetName + "] set to:[" + val + "]";
+		log.info("\n\t" + logline);
+		return val;
+	}
+
+	@Override
+	public void init() throws Exception {
+		log.warn("\n\tinit() does nothing in SQLPropertiesReader! \n");
+	}
+
+	@Override
+	public Boolean getBooleanProperty(String property, Boolean defaultValue,
+			Level level, boolean exception) throws Exception {
+		String s = kvPairs.get(property);
+		boolean val = defaultValue;
+		if (s == null) {
+			String err = "Boolean property:[" + property + "] was not found";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		try {
+			val = Boolean.parseBoolean(s);
+		} catch (NumberFormatException nfx) {
+			String err = "property:" + property + " bad boolean value:[" + s
+					+ "] could not parse as boolean";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		String logline = "\n\tproperty:" + property + " from:["
+				+ propertySetName + "] set to:[" + val + "]";
+		log.info("\n\t" + logline);
+		return val;
+	}
+ 
+	@Override 
+	public Long getLongProperty(String property, Long defaultValue,
+			Level level, boolean exception) throws Exception {
+		String s = kvPairs.get(property);
+		long val = defaultValue;
+		if (s == null) {
+			String err = "Long property:[" + property + "] was not found";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		try {
+			val = Long.parseLong(s);
+		} catch (NumberFormatException nfx) {
+			String err = "property:" + property + " bad long value:[" + s
+					+ "] could not parse as Long";
+			logChoice(level, err, exception);
+			return defaultValue;
+		}
+		String logline = "\n\tproperty:" + property + " from:["
+				+ propertySetName + "] set to:[" + val + "]";
+		log.info("\n\t" + logline);
+		return val;
+	}
+
+	/**
+	 * The name of the property set you want to load. This could be the name of
+	 * a particular application instance, for exacmple.
+	 */
+	private String propertySetName;
+
+//	/**
+//	 * A JDBC Connection. We don't worry about opening and closing connections
+//	 * for single units of work because there are seldom very many properties.
+//	 */
+//	private Connection conn;
+
+	/**
+	 * The current set of key/value pairs. This is cleared anytime a new set is
+	 * loaded.
+	 */
+	private Map<String, String> kvPairs = new HashMap<String, String>();
+
+//	private String driverName = "com.mysql.jdbc.Driver";
+//	private String connectionUrl = "jdbc:mysql://localhost:3306/Medialets";
+//	private String uname = "root";
+//	private String password = "";
+
+//	/**
+//	 * The class name of the database driver. Defaults to com.mysql.jdbc.Driver
+//	 * 
+//	 * @return
+//	 */
+//	public String getDriverName() {
+//		return driverName;
+//	}
+//
+//	/**
+//	 * * The class name of the database driver. Defaults to
+//	 * com.mysql.jdbc.Driver
+//	 * 
+//	 * @param driverName
+//	 */
+//	public void setDriverName(String driverName) {
+//		this.driverName = driverName;
+//	}
+//
+//	/**
+//	 * The connection URL. It defaults to "jdbc:mysql://localhost:3306/Medialets" 
+//	 * which is usually good for testing
+//	 * @return
+//	 */
+//	public String getConnectionUrl() {
+//		return connectionUrl;
+//	}
+///**
+//	 * The connection URL. It defaults to "jdbc:mysql://localhost:3306/Medialets" 
+//	 * which is usually good for testing
+// * @param connectionUrl
+// */
+//	public void setConnectionUrl(String connectionUrl) {
+//		this.connectionUrl = connectionUrl;
+//	}
+//
+//	/**
+//	 * The database user name. Defaults to root.
+//	 * @return
+//	 */
+//	public String getUname() {
+//		return uname;
+//	}
+//
+//	/**
+//	 * The database user name. Defaults to root.
+//	 * @return
+//	 */
+//	public void setUname(String uname) {
+//		this.uname = uname;
+//	}
+//
+//	/**
+//	 * The database password. Defaults to empty string.
+//	 * @return
+//	 */
+//	public String getPassword() {
+//		return password;
+//	}
+//	/** 
+//	 * The database password. Defaults to empty string.
+//	 * @param password
+//	 */
+//	public void setPassword(String password) {
+//		this.password = password;
+//	}
+
+//	/**
+//	 * Create a database connection with instance scope.
+//	 * @throws Exception
+//	 */
+//	private void createConnection() throws Exception {
+//		Class.forName(driverName).newInstance();
+//		conn = DriverManager.getConnection(connectionUrl, uname, password);
+//	}
+//	/**
+//	 * Close the currently active database connection. It is an error to close a 
+//	 * closed or nonexistent connection.
+//	 * @throws Exception
+//	 */
+//	private void closeConnection() throws Exception {
+//		conn.close();
+//	}
+
+//	/**
+//	 * Execute a query that returns a result set.
+//	 * @param stmt
+//	 * @return
+//	 * @throws Exception
+//	 */
+//	private ResultSet executeQuery(String stmt) throws Exception {
+//		Statement st = conn.createStatement();
+//		ResultSet rs = st.executeQuery(stmt);
+//		return rs;
+//	}
+//
+//	/**
+//	 * Execute a query that returns the number of affected rows. E.g. delete.
+//	 * @param stmt
+//	 * @return
+//	 * @throws Exception
+//	 */
+//	private int executeUpdate(String stmt) throws Exception {
+//		Statement st = conn.createStatement();
+//		int ops = st.executeUpdate(stmt);
+//		return ops;
+//	}
+
+	/**
+	 * Get a listing of all the property name for a given property set.
+	 * @param propSet
+	 * @return
+	 * @throws Exception
+	 */
+	public List<String> fetchKeysFor(String propSet)throws Exception {
+		List<String> al = new ArrayList<String>(); 
+		createConnection();
+		String query = "SELECT pkey FROM " + getTableName() + " where appkey='"
+				+ propSet + "'";
+		ResultSet rs = executeQuery(query);
+		while (rs.next()) {
+			String key = rs.getString("pkey");  
+			al.add(key);
+		}
+		return al;
+	}
+	
+	/**
+	 * Initialize the mapping of keys to values for the given set of properties
+	 * as named in the parameter. The fetch deletes all previous data.
+	 * 
+	 * @param key
+	 */
+	public void fetchPropsFor(String propSet) throws Exception {
+		kvPairs.clear();
+		propertySetName = propSet;
+		createConnection();
+		String query = "SELECT id, appkey, pkey, pvalue FROM " + getTableName() + " where appkey='" 
+				+ propertySetName + "'";
+		ResultSet rs = executeQuery(query);
+		System.out.println();
+		while (rs.next()) {
+			int id = rs.getInt("id");
+			String appkey = rs.getString("appkey");
+			String pkey = rs.getString("pkey");
+			String pvalue = rs.getString("pvalue");
+			System.out.println("\tFound propset:"+ propSet + " property: id:" + id + " appkey:"
+					+ appkey + " pkey:" + pkey + " value: " + pvalue);
+			kvPairs.put(pkey, pvalue);
+
+		}
+		System.out.println();
+		closeConnection();
+	}
+
+	/**
+	 * Delete a value from one properties set. This is called before insert.
+	 * 
+	 * @param propSet
+	 * @param prop
+	 * @throws Exception
+	 */
+	public void delete(String propSet, String prop) throws Exception {
+		createConnection();
+		String stmt = "delete from " + getTableName() + " where appkey='" + propSet
+				+ "' and pkey='" + prop + "'";
+		System.out.println("stmt:" + stmt);
+		int ops = executeUpdate(stmt);
+		if (ops != 0 && ops != 1) {
+			log.warn("parameter insert found multiple copies of " + prop
+					+ " in " + propSet + ". Copy count:" + ops);
+		}
+		closeConnection();
+	}
+
+	/**
+	 * Insert parameter triples into the database.
+	 * 
+	 * @param app
+	 * @param prop
+	 * @param value
+	 */
+	public void insert(String app, String prop, String value) throws Exception {
+		delete(app, prop);
+		createConnection();
+		String stmt = "INSERT INTO " + getTableName() + " " + "VALUES (0,'" + app + "', '"
+				+ prop + "', '" + value + "');";
+		System.out.println("stmt:" + stmt);
+		int ops = executeUpdate(stmt);
+		if (ops != 1) {
+			throw new Exception("Failed to insert a value!");
+		}
+		closeConnection();
+	}
+ 
+	
+	/**
+	 * Load the database from a file.  Takes either a properties file or a fields-def csv 
+	 * file as input. The choice must be indicated as the type argument either KV of KVV 
+	 * respectively. (The row order of fields-def files is significant, and this must be 
+	 * allowed for in the load process.)  They are stored in the database as Key/index,value 
+	 * rather than Key/Value. The index is parse on read.
+	 * 
+	 * @param fname The full pathname of the file to be read
+	 * @param appname The name of under which the values should be inserted in the DB, e.g., DAR_1 or EVENT_3
+	 * @param type KV for input data from a props file, KVV for input data from a fields def file.
+	 * @throws Exception
+	 */
+	public void loadPropsToDBFromFileSrc(String fname, String appname, String type) throws Exception {
+		List<String[]> input = new ArrayList<String[]>();
+		try { 
+			BufferedReader in = new BufferedReader(new FileReader(fname)); 
+			String str; 
+			while ((str = in.readLine()) != null) { 
+				int index = str.indexOf("#");
+				if(index >= 0){
+					continue;
+				}
+				if(type.equals("KV")) {
+					index = str.indexOf("=");
+				}
+				else if (type.equals("KVV")){
+					index = str.indexOf(",");
+				}
+				if(index <= 0){
+					continue;
+				}
+				String key = str.substring(0,index);
+				String val = str.substring(index + 1);
+				String [] pair = new String[2];
+				pair[0]=key;
+				pair[1]=val;
+				input.add(pair); 
+				System.out.println("loaded appname:"+appname+" key:" + key + " val:" + val + " source:" + fname);
+			} 
+			in.close(); 
+		} 
+		catch (IOException e) { 
+				log.error("loadDBFromFile() failed:" + e.getMessage());
+		} 
+		SQLPropertiesReader sqlpr = new SQLPropertiesReader(); 
+		sqlpr.clear(appname);
+		for(int i=0; i<input.size(); i++){
+			String key = input.get(i)[0].trim();
+			String val = null;
+			if(type.equals("KV")){
+				val = input.get(i)[1].trim();
+			}
+			else if(type.equals("KVV")){
+				val = "" + i + "," + input.get(i)[1]; 
+			}
+			else{
+				String err = "loadPropsDBFromFile() has bad init type:" + type + ". Must be either KV or KVV";
+				throw new Exception(err);
+			}
+			sqlpr.insert(appname, key, val);
+		}
+	}
+}

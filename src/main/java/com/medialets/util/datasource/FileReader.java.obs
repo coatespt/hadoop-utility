@@ -1,0 +1,14 @@
+package com.medialets.util.datasource;
+
+import java.io.BufferedReader;
+import java.util.StringTokenizer;
+
+public class FileReader {
+	public BufferedReader bReader;
+	public StringTokenizer st;
+	public boolean zipstream;
+
+	public FileReader(boolean zipstream) {
+		this.zipstream = zipstream;
+	}
+}

@@ -1,0 +1,4 @@
+use medialets;
+CREATE TABLE app_filelist (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, appkey VARCHAR(256), filename VARCHAR(256), written DATETIME);
+CREATE TABLE app_filefiltermap (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, appkey VARCHAR(256), filename VARCHAR(256), filtername VARCHAR(256), written DATETIME);
+CREATE TABLE app_filtername (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, appkey VARCHAR(256), filtername VARCHAR(256), written DATETIME);

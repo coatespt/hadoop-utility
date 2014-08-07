@@ -1,0 +1,70 @@
+package com.medialets.util.test;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.medialets.util.datasource.Row;
+
+/**
+ * Utilities class for odds and ends that are reused frequently in test classes
+ * @author peterc
+ *
+ */
+public class TestUtilities {
+
+	/**
+	 * Print out a tic every so often, and a newline and number processed more infrequently.
+	 * @param count	The value you are tic-ing off	
+	 * @param ticFrequency The frequency to mark a tic	
+	 * @param lineFeedFrequency	The frequency of line feeds. Make this X (tics) times the ticFrequence
+	 */
+	public static void statusIndication(long count, long ticFrequency, long lineFeedFrequency) {
+		if(count%ticFrequency==0){
+			System.out.print(",");
+			if(count%lineFeedFrequency==0){
+				System.out.println(" processed:" + count);
+			}
+		}
+	}
+	/**
+	 * Print out a tic every so often, and a newline and number processed more infrequently.
+	 * @param count	The value you are tic-ing off	
+	 * @param ticFrequency The frequency to mark a tic	
+	 * @param lineFeedFrequency	The frequency of line feeds. Make this X (tics) times the ticFrequence
+	 * @param tic is the charachter to print, e.g., a dot.
+	 * @param type is the type of output, i.e.,the count printed a the end of a line of tics.
+	 */
+	public static void statusIndication(long count, long ticFrequency, long lineFeedFrequency, String tic, String type) {
+		if(count%ticFrequency==0&&count>0){
+			System.out.print(tic);
+			if(count%lineFeedFrequency==0 && count>0){
+				System.out.println("\n\tprocessed:" + count + " " + type);
+			}
+		}
+	}
+
+	/**
+	 * Delete the given file if it exists, otherwise do nothing
+	 * @param file
+	 * @return true if the file is not there or if it was successfully whacked.
+	 */
+	public static boolean whackIfExists(String file) {
+		File f = new File(file);
+		boolean success = false;
+		if(f.exists()){
+			success = f.delete();
+		}
+		else {
+			success=true;
+		}
+		return success;
+	}
+	
+	public static List<Row> rowsFromCSVAtPath(String csvFilePath, String fieldTypeDictPath, List<String>keysForComplexKey){
+		List<Row> rowList = new ArrayList<Row>();
+		return null; //TODO finish this once other required precursor utility methods are done
+		
+	}
+	
+}

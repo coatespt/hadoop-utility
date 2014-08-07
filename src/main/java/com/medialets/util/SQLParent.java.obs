@@ -1,0 +1,152 @@
+package com.medialets.util;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+
+public abstract class SQLParent {
+
+	/**
+	 * A JDBC Connection. We don't worry about opening and closing connections
+	 * for single units of work because there are seldom very many properties.
+	 */
+	protected Connection conn;
+	protected String driverName = "com.mysql.jdbc.Driver";
+	protected String connectionUrl = "jdbc:mysql://localhost:3306/Medialets";
+	protected String uname = "root";
+	protected String password = "";
+	//protected String tableName;
+//	protected String format = "yyyy-MM-dd HH:mm:ss";
+	protected String format;
+
+	abstract String getTableName();
+	abstract void setTableName(String s);
+
+	/**
+	 * The class name of the database driver. Defaults to com.mysql.jdbc.Driver
+	 * 
+	 * @return
+	 */
+	public String getDriverName() {
+		return driverName;
+	}
+
+	/**
+	 * * The class name of the database driver. Defaults to
+	 * com.mysql.jdbc.Driver
+	 * 
+	 * @param driverName
+	 */
+	public void setDriverName(String driverName) {
+		this.driverName = driverName;
+	}
+
+	/**
+	 * The connection URL. It defaults to "jdbc:mysql://localhost:3306/Medialets" 
+	 * which is usually good for testing
+	 * @return
+	 */
+	public String getConnectionUrl() {
+		return connectionUrl;
+	}
+
+	/**
+		 * The connection URL. It defaults to "jdbc:mysql://localhost:3306/Medialets" 
+		 * which is usually good for testing
+	 * @param connectionUrl
+	 */
+	public void setConnectionUrl(String connectionUrl) {
+		this.connectionUrl = connectionUrl;
+	}
+
+	/**
+	 * The database user name. Defaults to root.
+	 * @return
+	 */
+	public String getUname() {
+		return uname;
+	}
+
+	/**
+	 * The database user name. Defaults to root.
+	 * @return
+	 */
+	public void setUname(String uname) {
+		this.uname = uname;
+	}
+
+	/**
+	 * The database password. Defaults to empty string.
+	 * @return
+	 */
+	public String getPassword() {
+		return password;
+	}
+
+	/** 
+	 * The database password. Defaults to empty string.
+	 * @param password
+	 */
+	public void setPassword(String password) {
+		this.password = password;
+	}
+
+	/**
+	 * Create a database connection with instance scope.
+	 * @throws Exception
+	 */
+	protected void createConnection() throws Exception {
+		Class.forName(driverName).newInstance();
+		conn = DriverManager.getConnection(connectionUrl, uname, password);
+	}
+
+	/**
+	 * Close the currently active database connection. It is an error to close a 
+	 * closed or nonexistent connection.
+	 * @throws Exception
+	 */
+	protected void closeConnection() throws Exception {
+		conn.close();
+	}
+
+	/**
+	 * Clear a set of values from the database. This is handy for testing.
+	 * 
+	 * @param app
+	 * @throws Exception
+	 */
+	public void clear(String appKey) throws Exception {
+		createConnection();
+		Statement st = conn.createStatement();
+		String stmt = "DELETE FROM " + getTableName() + " where appkey = '" + appKey + "'";
+		System.out.println("stmt:" + stmt);
+		st.executeUpdate(stmt);
+		closeConnection();
+	}
+
+	/**
+	 * Execute a query that returns the number of affected rows. E.g. delete.
+	 * @param stmt
+	 * @return
+	 * @throws Exception
+	 */
+	public int executeUpdate(String stmt) throws Exception {
+		Statement st = conn.createStatement();
+		int ops = st.executeUpdate(stmt);
+		return ops;
+	}
+
+	/**
+	 * Execute a query that returns a result set.
+	 * @param stmt
+	 * @return
+	 * @throws Exception
+	 */
+	protected ResultSet executeQuery(String stmt) throws Exception {
+		Statement st = conn.createStatement();
+		ResultSet rs = st.executeQuery(stmt);
+		return rs;
+	}
+
+}

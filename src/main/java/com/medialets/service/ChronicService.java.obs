@@ -1,0 +1,351 @@
+/**
+ * EventCapture
+ * created by bill at Nov 27, 2008
+ */
+package com.medialets.service;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.log4j.Logger;
+
+
+
+/**
+ * @author bill
+ *
+ */
+public class ChronicService {
+	
+	private static Logger log = Logger.getLogger(ChronicService.class.getName());
+	
+	private static final String DATE_PATTERN = "[0-9]{4}\\-[0-9]{2}\\-[0-9]{2}";
+	private static final String TIME_PATERN = "[0-9]{2}:[0-9]{2}:[0-9]{2}";
+	private static final String TZ_PATTERN = "[\\+|\\-][0-9]{4}";
+	//private Date referenceTime;
+	private Date checkedTime;
+	//private Date originatingTimezone;
+	//private Boolean isCheckedAheadOfReference;
+	private String tz;
+	
+	
+	
+	/**
+	 * @param referenceTime
+	 * @param checkedTime
+	 * @param originatingTimezone
+	 * @param tz
+	 */
+	public ChronicService(Date referenceTime, Date checkedTime, Date originatingTimezone, String tz) {
+		//this.referenceTime = referenceTime;
+		this.checkedTime = checkedTime;
+		//this.originatingTimezone = originatingTimezone;
+		this.tz = tz;
+	}
+
+	/** returns a timestamp representing the broadcast time within the TimeZone the broadcast was registered to have occurred in*/
+	public Date broadcastTimestampInOriginalTimezone(){
+		return new Date(checkedTime());
+	}
+
+	/** returns a timestamp representing the broadcast time offset by the local server timezone value */
+	public Date checkedTimestampInThisTimezone(){
+		return new Date(checkedTime());
+	}
+
+	/** the number of milliseconds of the broadcast timestamp after converting to server timezone */
+	public long checkedLocalMillis(){
+		return checkedTimestampInThisTimezone().getTime();
+	}
+
+
+	
+	/** returns a long  representing time from the device at time of broadcast */
+	public long checkedTime(){
+		return this.checkedTime.getTime();
+	}
+
+	
+	/** returns an NSTimeZone object representing the clients originating TimeZone */
+	/*public TimeZone originatingTimezone(){
+		TimeZone deviceLocal = TimeZone.getTimeZone(tz());
+		//log.debug("The local timezone is: " + deviceLocal);
+		return  deviceLocal;
+	}*/
+		
+	public static SimpleDateFormat iso8601Formatter(){
+		SimpleDateFormat aFormatter = new SimpleDateFormat();
+		aFormatter.applyPattern("yyyy-MM-dd HH:mm:ss z");
+		return aFormatter;
+	}
+	
+	/**junk comment to force git refresh */
+	public static String iso8601FromLongString(String millis){
+		GregorianCalendar theCal = new GregorianCalendar();
+		theCal.setTimeInMillis(Long.parseLong(millis));
+		theCal.setTimeZone(TimeZone.getTimeZone("GMT"));
+		return iso8601Formatter().format(theCal.getTime());
+	}
+	
+	public static Date dateFromMillisString(String millis){
+		GregorianCalendar theCal = new GregorianCalendar();
+		theCal.setTimeInMillis(Long.parseLong(millis));
+		theCal.setTimeZone(TimeZone.getTimeZone("GMT"));
+		return theCal.getTime();
+	}
+	
+	
+	
+	/*public static Date timestampFromISOStringWithTimezoneOrUTC(String val, TimeZone tz){
+		String fixed = val.replace("T", " ");
+		String firstPortion = fixed.substring(0, 19);
+		String timezoneString = fixed.substring(19);
+		String completeString = firstPortion + " " + timezoneString;
+		SimpleDateFormat formatter = new SimpleDateFormat("%Y-%m-%d %H:%M:%S %z");
+		Date returnTS = null;
+		if(tz == null)
+			returnTS =  (Date) formatter.parseObjectInUTC(completeString, new ParsePosition(0));
+		else
+			try {
+				returnTS = (Date)formatter.parseObject(completeString);
+			} catch (ParseException e) {
+				log.error("Error parsing timestamp from string");
+				e = null;
+			}
+		return returnTS;
+	}*/
+	
+	public static Date timestampFromISOStringInUTC(String val){
+		String datePortion = datePortionFromString(val);
+		String timePortion = timePortionFromString(val);
+		String timezonePortion = timezonePortionFromString(val);
+		if (timezonePortion == null || timezonePortion.equals(""))
+			timezonePortion = TimeZone.getTimeZone("GMT").getID();
+		String completeString = datePortion + " " + timePortion + " " + timezonePortion;
+		SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
+		Date returnTS = null;
+		try {
+			returnTS = (Date)formatter.parseObject(completeString);
+		} catch (ParseException e) {
+			e.printStackTrace();
+			log.error("Error parsing timestamp from string: " + val + " which was coorced to: " + completeString);
+			e = null;
+		}
+		return returnTS;
+	}
+	
+	/** uses a regex and applies to arg to return the substring matching '2009-01-01' type pattern'
+	 * 
+	 * @param val
+	 * @return the substring if any; null if not
+	 */
+	public static String datePortionFromString(String val){
+		return substringFromStringUsingPatter(val, DATE_PATTERN);
+	}
+	
+	public static String timePortionFromString(String val){
+		return substringFromStringUsingPatter(val, TIME_PATERN);
+	}
+	
+	public static String timezonePortionFromString(String val){
+		return substringFromStringUsingPatter(val, TZ_PATTERN);
+	}
+	
+	/** returns a date with zero for minutes and seconds
+	 * 
+	 * @param aDate
+	 * @return
+	 */
+	public static Date dateRelevantToHour(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+	}
+	
+	/** returns the start of the day, hours, minutes and seconds zeroed out
+	 * 
+	 * @param aDate
+	 * @return
+	 */
+	public static Date dateRelavantToDay(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.set(GregorianCalendar.HOUR_OF_DAY, 0);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+	}
+	
+	/** returns the start of the month of the date argument; day, hour, minute and seconds set to zero
+	 * 
+	 * @param aDate
+	 * @return
+	 */
+	public static Date dateRelevantToMonth(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.set(GregorianCalendar.DAY_OF_MONTH, 1);
+		newCal.set(GregorianCalendar.HOUR_OF_DAY, 0);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+	}
+	
+	
+	/** 
+	 * computes and returns a date at beginning of next hour from argument, zeroes out minutes and seconds
+	 * @param aDate
+	 * @return date set to top of next hour from aDate
+	 */
+	public static Date dateAtTopOfNextHour(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.add(GregorianCalendar.HOUR_OF_DAY, 1);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+		
+	}
+	
+	/** computes and returns a date at beginning of next day from argument, zeroes out minutes and seconds
+	 * sets the hour to first hour
+	 * @param aDate
+	 * @return
+	 */
+	public static Date dateAtTopOfNextDay(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.add(GregorianCalendar.DAY_OF_MONTH, 1);
+		newCal.set(GregorianCalendar.HOUR_OF_DAY, 0);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+	}
+	
+	public static Date dateAtTopOfNextMonth(Date aDate){
+		GregorianCalendar newCal = new GregorianCalendar();
+		newCal.setTime(aDate);
+		newCal.add(GregorianCalendar.MONTH, 1);
+		newCal.set(GregorianCalendar.DAY_OF_MONTH, 1);
+		newCal.set(GregorianCalendar.HOUR_OF_DAY, 0);
+		newCal.set(GregorianCalendar.MINUTE, 0);
+		newCal.set(GregorianCalendar.SECOND, 0);
+		return newCal.getTime();
+	}
+	
+	public static Date dateFromPostECDARString(String val){
+		SimpleDateFormat formatter = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss");
+		try {
+			return formatter.parse(val.trim());
+		} catch (ParseException e) {
+			log.error("Unparseable date:" + val + " found in chronic service.");
+			return null;
+		}
+	}
+	
+	private static String substringFromStringUsingPatter(String source, String format){
+		String matchingSubString = null;
+		Pattern aPattern = Pattern.compile(format);
+		Matcher matcher = aPattern.matcher(source.trim());
+		if(matcher.find()){
+			if(log.isDebugEnabled()) log.debug("Matcher found: " + matcher.group() + " from source: " + source);
+			matchingSubString = matcher.group();
+		}
+		return matchingSubString;
+	}
+	
+	public static String hourQueryStringFromDate(Date aDate){
+		SimpleDateFormat hourFormatter = new SimpleDateFormat("yyyy-MM-dd HH");
+		return hourFormatter.format(aDate);
+	}
+	
+	public static String hourIDQueryStringFromDate(Date aDate){
+		SimpleDateFormat hourFormatter = new SimpleDateFormat("yyyyMMddHH");
+		return hourFormatter.format(aDate);
+	}
+	
+	public static String hourOfDayQueryStringFromDate(Date aDate){
+		SimpleDateFormat hourFormatter = new SimpleDateFormat("HH");
+		return hourFormatter.format(aDate);
+	}
+	
+	public static String monthStringFromDate(Date aDate){
+		SimpleDateFormat monthFormatter = new SimpleDateFormat("MM");
+		return monthFormatter.format(aDate);
+	}
+	
+	public static String yearMonthStringFromDate(Date aDate){
+		SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM");
+		return formatter.format(aDate);
+	}
+	
+	public static String yearMonthIDStringFromDate(Date aDate){
+		SimpleDateFormat formatter = new SimpleDateFormat("yyyyMM");
+		return formatter.format(aDate);
+	}
+	
+	public static String dayQueryStringForDate(Date aDate){
+		SimpleDateFormat dayFormatter = new SimpleDateFormat("yyyy-MM-dd 00:00:00");
+		String dateString = null;
+		try {
+			dateString = dayFormatter.format(aDate);
+		} catch (Exception e) {
+			log.error("Failed to format a date: " + aDate + ", using formatter pattern: " + dayFormatter.toPattern());
+			e.printStackTrace();
+		}
+		return dateString;
+	}
+	
+	public static String dayIDQueryStringForDate(Date aDate){
+		SimpleDateFormat dayFormatter = new SimpleDateFormat("yyyyMMdd");
+		String dateString = null;
+		try {
+			dateString = dayFormatter.format(aDate);
+		} catch (Exception e) {
+			log.error("Failed to format a date: " + aDate + ", using formatter pattern: " + dayFormatter.toPattern());
+			e.printStackTrace();
+		}
+		return dateString;
+	}
+	
+	public static String dayOfWeekQueryStringForDate(Date aDate){
+		SimpleDateFormat dayFormatter = new SimpleDateFormat("EEEEEEEE");
+		return dayFormatter.format(aDate);
+	}
+	
+	
+	public static Date timestampInUTCFromISOString(String val){
+		log.debug("The intput ts for utc is: " + val);
+		Date returnTS =  ChronicService.timestampFromISOStringInUTC(val);
+		log.debug("The returnTS for UTC is: " + returnTS);
+		return returnTS;
+	}
+	
+	/*public static Date timestampWithProperTimezoneFromISOString(String val){
+		log.debug("The intput ts for proper is: " + val);
+		Date returnTS =  ChronicService.timestampFromISOStringWithTimezoneOrUTC(val, ChronicService.timezoneFromISOString(val));
+		log.debug("The returnTS for preserved is: " + returnTS);
+		return returnTS;
+	}*/
+	
+	public static String mysqlTimestampFormatter(Date aStamp) {
+        SimpleDateFormat formatter = new SimpleDateFormat();
+        formatter.applyPattern("yyyy-MM-dd HH:mm:ss");
+        return formatter.format(aStamp);
+    }
+	
+	public static String distinctTimeStringFromDate(Date aStamp){
+		long millis = aStamp.getTime();
+		return millis + "" ;
+	}
+	
+
+
+}

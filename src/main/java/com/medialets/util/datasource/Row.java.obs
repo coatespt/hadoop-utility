@@ -1,0 +1,548 @@
+package com.medialets.util.datasource;
+
+import java.io.File;
+import java.text.Format;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+
+import com.a140.util.UtilityAlt;
+import com.medialets.exception.NoValidKeyFieldsException;
+import com.medialets.service.ChronicService;
+ 
+
+/**
+ * One CSV row, converted to a set of objects addressable by their names and accessible
+ * as typed objects.
+ * 
+ * The object carries a significant overhead for initialization to set up the mappings
+ * of names to indexes, indexes to values, etc.  Thus it is intended to be created once
+ * for each thread and re-initialized over and over with csv text.
+ * 
+ * The threads should not share a Row object because it holds state that changes
+ * with each row processed.
+ * 
+ * Set this up once, then call initWith(String csv) for each row in turn;
+ * 
+ * @author peterc
+ *
+ */
+public class Row {
+	
+
+	private static Logger log = Logger.getLogger(Row.class.getName());
+	private static String EMPTY_STRING = "";
+	private FieldTypeDict fieldTypes;
+	private Integer rowId=0;
+	private String tableName="";
+	private String csvRow;
+	private List<Object> fields;
+	private ComplexKey key;
+	private Integer expectedColumns;
+	
+	
+	/**
+	 * constructor to set up this object with initial values needed to handle specific row "types"; after this initialization 
+	 * you should message this instance with the initWithString(csvString) method for specific access to the attributes of the row
+	 * @param fieldTypes
+	 * @param key
+	 * @param expectedColumns
+	 */
+	public Row(FieldTypeDict fieldTypes, ComplexKey key,
+			Integer expectedColumns) {
+		this.fieldTypes = fieldTypes;
+		this.key = key;
+		this.expectedColumns = expectedColumns;
+		
+	}
+	
+	/** default constructor
+	 * 
+	 */
+	public Row(){
+		
+	}
+	
+	/** static factory, initialized with csvData string after constructing instance using either the fieldTypes or fieldTypesPath, and a
+	 * ComplexKey, columnsCount
+	 * @param fieldTypes use either this or fieldTypesPath; if both given, will use this arg
+	 * @param fieldTypesPath use either this or fieldTypes; if both given, will use fieldTypes and NOT this
+	 * @param key a ComplexKey object
+	 * @param expectedColumns the number of expected columns, should match line count of csv file used to construct the fieldTypes dictionary
+	 * @param csvData string representing one row of data; should match with previous definitions or will fail
+	 * @return a new constructed and populated Row object
+	 */
+	public static Row rowFromDictKeyWithCSVData(FieldTypeDict fieldTypes, String fieldTypesPath, ComplexKey key, Integer expectedColumns, String csvData){
+		File fieldDictDefCSV = null;
+		Row newRow = null;
+		if(fieldTypes == null){
+			fieldDictDefCSV =(fieldTypesPath != null) ?  new File(fieldTypesPath) : null;
+			
+		}
+		
+		return null;
+	}
+	
+	
+	/**
+	 * Compute the hash of the synthetic key or throw an exception if no
+	 * synthetic key is availble. This is not suitable for use as the 
+	 * normal hash key because it is only available sometimes.
+	 * @return
+	 * @throws Exception
+	 */
+	public int stripeHash() throws Exception{ 
+		return getSyntheticKey().hashCode();
+	}
+
+	public Integer getExpectedColumns() {
+		return expectedColumns;
+	}
+
+	public void setExpectedColumns(Integer expectedColumns) {
+		this.expectedColumns = expectedColumns;
+	}
+
+	public Object getSyntheticKey() throws NoValidKeyFieldsException, Exception  {
+		return key.getSyntheticKey(this);
+	}
+
+	public void setKey(ComplexKey key) {
+		this.key = key;
+	}
+
+	/**
+	 * The row position in the CSV file
+	 * @return
+	 */
+	public Integer getRowId() {
+		return rowId;
+	}
+
+	/**
+	 * The row position in the CSV file
+	 * @param rowId
+	 */
+	public void setRowId(Integer rowId) {
+		this.rowId = rowId;
+	}
+
+	/**
+	 * The name of the CSV file
+	 * @return
+	 */
+	public String getTableName() {
+		return tableName;
+	}
+
+	/**
+	 * The name of the CSV file
+	 * @param tableName
+	 */
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+
+	/**
+	 * The data dictionary for this file
+	 * @return
+	 */
+	public FieldTypeDict getFieldTypes() {
+		return fieldTypes;
+	}
+
+	/**
+	 * The data dictionary for this file
+	 * @param fieldTypes
+	 */
+	public void setFieldTypes(FieldTypeDict fieldTypes) {
+		this.fieldTypes = fieldTypes;
+	}
+
+	/**
+	 * The raw CSV row
+	 * @return
+	 */
+	public String getCsvRow() {
+		return csvRow;
+	}
+ 
+	/*
+	 * Hand a CSV delimited string to an initialized Row object. This will fail if you have not first
+	 * set up the data dictionary first, which equips it with names for the fields, indices, etc.
+	 * This step initializes it with a particular instance of data.
+	 */
+	synchronized public void initWith(String csv) throws Exception {
+		this.csvRow = csv;
+		fields = new ArrayList<Object>();
+		csvRowIntoObjects();
+	}
+	
+	static Format formatter = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss");
+	 
+	/**
+	 * Convert the csv file to a list of objects named and indexed as in the data dictionary
+	 */
+	private void csvRowIntoObjects() throws Exception { 
+		int fieldIndex = 0;
+		List<String> tokens=null;
+		String failProcedure = "\n\tIf you fail here, check the key fields specified in your " +
+				"properties file. \n\t\tYou probably have an illegal field, bad data type, etc.";
+		try{
+			tokens = UtilityAlt.getTokenListFromString(csvRow, ',', expectedColumns); 
+		}
+		catch(Exception x){ 
+			log.error(failProcedure);
+			String err = "Failed to get token list for:[" + csvRow + "]";
+			log.error(err); 
+			throw x;
+		}
+		try{
+			for(String tok : tokens){ 
+				FieldType type = fieldTypes.getType(fieldIndex++);
+				if (tok == null || tok.equals(EMPTY_STRING)) {
+					fields.add(null);
+					continue;
+				}
+				try {
+					if (type == FieldType.STRING) {
+						fields.add(tok);
+	
+					} else if (type == FieldType.INTEGER) {
+						fields.add(Integer.parseInt(tok));
+	
+					}  else if (type == FieldType.LONG) {
+						fields.add(Long.parseLong(tok));
+	
+					} else if (type == FieldType.DATE) {
+						// todo: parse back the date!
+						// todo: We might want more than one kind of date. 
+						//
+						Date date = ChronicService.dateFromPostECDARString(tok);
+					    String dateStr = formatter.format(date);    
+					    if(!tok.equals(dateStr)){
+					    	log.warn("\nDate is funky---original token: " + tok + 
+					    			" from parsed back from date: " + dateStr + 
+					    			" CSV:\n\t" + csvRow + "\n"); 
+					    }
+						fields.add(date);
+					} else if (type == FieldType.DOUBLE) {
+						fields.add(Double.parseDouble(tok));
+	
+					} else if (type == FieldType.BOOLEAN) {
+						fields.add(Boolean.parseBoolean(tok));
+					} else {
+						String err = "Found unknown field type:" + type.toString() + " in Row, filed:["+tok+"]. Quitting.";
+						log.error(err);
+						throw new Exception(err);
+					}
+				} catch (NumberFormatException nfx) {
+					String err = "Badly formed number:["+ tok +"] in " + tableName + " at row:" + rowId +
+						". Using null.";
+					log.warn(err); 
+					fields.add(null);
+				} catch (Exception x) {
+					String err = "Field:["+tok+"] computation failed at " + tableName + " at row:" + 
+						rowId + ". Using null.";
+					log.warn(err); 
+					fields.add(null);
+				}
+			}
+		}
+		catch(Exception x){
+			log.error(failProcedure);
+			String err = "The token handling loop failed for:[" + csvRow + "] with exception:" + x.getMessage();
+			log.error(err); 
+			throw x;
+		}
+	}
+	
+	/** this method is similar to validateRow, but sends back a boolean to the caller indicating whether this row 
+	 * should be skipped should one of the fields indicated in the fields arg be null, it does not consider a positive as 
+	 * a failure and will not write the row out as a bad row. Useful as a processing filter where you don't want to bother
+	 * proceeding with the row if it's not going to be relevant
+	 **/
+	
+	public static boolean shouldSkipRowIfMissingValues(Row row, Map<String, FieldType> fields){
+		for(String key : fields.keySet()){
+			FieldType type = fields.get(key); 
+			String str;
+			if(type==FieldType.STRING){
+				try {
+					str = row.getString(key);
+				} catch (Exception e) {
+					e=null;
+					return true;
+				}
+				if(str==null || (str=str.trim()).equals("")){
+					return true;
+				} 
+				
+			} 
+			else if(type==FieldType.INTEGER){
+				Integer intval = null; 
+				try {
+					intval = row.getInteger(key); 
+				}  
+				catch(Exception x){ 
+					x=null;
+					return true;
+				}
+				if(intval==null){ 
+					return true;
+				}
+			}
+			else if(type==FieldType.BOOLEAN){ 
+				Boolean bval = null; 
+				try {
+					bval = row.getBoolean(key); 
+				}  
+				catch(Exception x){ 
+					x=null;
+					return true;
+				}
+				if(bval==null){ 
+					return true;
+				}
+			}
+			else if(type==FieldType.DOUBLE){ 
+				Double dval = null; 
+				try {
+					dval = row.getDouble(key); 
+				}  
+				catch(Exception x){ 
+					x=null;
+					return true;
+				}
+				if(dval==null){ 
+					return true;
+				}
+			}
+			else if(type==FieldType.DATE){
+				Date dval = null; 
+				try {
+					dval = row.getDate(key); 
+				}  
+				catch(Exception x){ 
+					x=null;
+					return true;
+				}
+				if(dval==null){ 
+					return true;
+				} 
+			}
+			else if(type==FieldType.LONG){ 
+				Long lval = null; 
+				try {
+					lval = row.getLong(key); 
+				}  
+				catch(Exception x){ 
+					x=null;
+					return true;
+				}
+				if(lval==null){ 
+					
+					return true;
+				}
+			}
+		} 
+		return false;
+	
+	}
+
+	/*
+	 * return value VALID means the wrong is valid otherwise read the error to know what the problem is
+	 */
+	public static String validateRowFields(Row row, Map<String,FieldType> fields){
+		for(String key : fields.keySet()){
+			FieldType type = fields.get(key); 
+			String str;
+			if(type==FieldType.STRING){
+				try {
+					str = row.getString(key);
+				} catch (Exception e) {
+					String err = "Row failed attempting to extract string value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(str==null || (str=str.trim()).equals("")){
+					String err = "Row returned null or empty string value for:[" + key + "]";
+					log.error(err);
+					return err;
+				} 
+				
+			} 
+			else if(type==FieldType.INTEGER){
+				Integer intval = null; 
+				try {
+					intval = row.getInteger(key); 
+				}  
+				catch(Exception x){ 
+					String err = "Row blew up reading integer value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(intval==null){ 
+					String err = "Row returned null integer value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+			}
+			else if(type==FieldType.BOOLEAN){ 
+				Boolean bval = null; 
+				try {
+					bval = row.getBoolean(key); 
+				}  
+				catch(Exception x){ 
+					String err = "Row blew up reading boolean value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(bval==null){ 
+					String err = "Row returned null boolean value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+			}
+			else if(type==FieldType.DOUBLE){ 
+				Double dval = null; 
+				try {
+					dval = row.getDouble(key); 
+				}  
+				catch(Exception x){ 
+					String err = "Row blew up reading double value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(dval==null){ 
+					String err = "Row returned null double value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+			}
+			else if(type==FieldType.DATE){
+				Date dval = null; 
+				try {
+					dval = row.getDate(key); 
+				}  
+				catch(Exception x){ 
+					String err = "Row blew up reading date value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(dval==null){ 
+					String err = "Row returned null date value for:[" + key + "]";
+					log.error(err);
+					return err;
+				} 
+			}
+			else if(type==FieldType.LONG){ 
+				Long lval = null; 
+				try {
+					lval = row.getLong(key); 
+				}  
+				catch(Exception x){ 
+					String err = "Row blew up reading long value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+				if(lval==null){ 
+					String err = "Row returned null long value for:[" + key + "]";
+					log.error(err);
+					return err;
+				}
+			}
+		} 
+		return "VALID";//TODO:jstein make this a static constant
+	}
+	
+	
+	
+	/**
+	 * Get an object by field name. Not type assumed.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public Object getValue(String fieldName) throws Exception {
+		Integer index = fieldTypes.getIndex(fieldName);
+		return fields.get(index);
+	}
+	
+	/**
+	 * Get a string field by name, assumes you know the type is a string.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public String getString(String fieldName) throws Exception {
+		//jstein 11/19/200, need to produce consistent values for field names that match the database
+		String myValue = (String)getValue(fieldName);
+		
+		//we want to keep a consistent device system name for the database
+		if (fieldName.equalsIgnoreCase("deviceSystemName")) 
+		{
+			//check to see if this is an iPhone type of device 
+			if (myValue.toUpperCase().contains("IPHONE")) //TODO:jstein review strategy to problem and performance hit on this
+			{
+				//ok we found that this is a IPHONE type of device system name so we make it match the database
+				myValue = "iPhone"; //TODO:jstein make this a static property from a consistent library
+			}
+		}
+		return myValue;
+	}
+
+	/**
+	 * Get an Integer field by name. Assumes you know the type is integer.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public Integer getInteger(String fieldName) throws Exception { 
+		return (Integer) getValue(fieldName);
+	}
+	
+	/**
+	 * Get a Long field by name. Assumes you know the type is long.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public Long getLong(String fieldName) throws Exception { 
+		return (Long) getValue(fieldName);
+	}
+	
+	/**
+	 * Get a double field by name. Assumes you know the type is a double.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public Double getDouble(String fieldName) throws Exception { 
+		return (Double) getValue(fieldName);
+	}
+	
+	/**
+	 * Get a boolean field by name. Assumes you know the type is boolean.
+	 * @param fieldName
+	 * @return
+	 * @throws Exception
+	 */
+	public Boolean getBoolean(String fieldName) throws Exception { 
+		return (Boolean) getValue(fieldName);
+	}
+	
+	/**
+	 * Get a field you know to contain a date.
+	 * @param fieldName The name of the field
+	 * @return A date
+	 * @throws Exception if the value is bogus
+	 */
+	public Date getDate(String fieldName) throws Exception { 
+		return (Date)getValue(fieldName);
+	}
+}

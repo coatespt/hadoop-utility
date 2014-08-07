@@ -1,0 +1,133 @@
+package com.medialets.util;
+ 
+		import java.sql.ResultSet;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+
+	public class SQLFileFilterMappingJournal extends SQLParent {
+		
+		private static Logger log = Logger.getLogger(SQLFileFilterMappingJournal.class.getName());
+		private String tableName = "app_filefiltermap";
+		public static int FILE_POS = 0;
+		public static int FILTER_POS=1;
+		public static int DATE_POS=2;
+		
+		public String getTableName() {
+			return tableName;
+		}
+
+		public void setTableName(String tableName) {
+			this.tableName = tableName;
+		}
+		/**
+		 * Fetch and return the set of triples: {filename, filtername, write-date} for a given app name
+		 * @param key
+		 */
+		public List<Object[]> fetchFileFilterTriplesFor(String appName) throws Exception { 
+			createConnection();
+			List<Object[]> list = new ArrayList<Object[]>();
+			String query = "SELECT filename,filtername,written FROM "+ getTableName()+" where appkey='" + appName + "'";
+			ResultSet rs = executeQuery(query);
+			System.out.println();
+			while (rs.next()) { 
+				String filename = rs.getString("filename");
+				String filtername = rs.getString("filtername");
+				Date written = rs.getDate("written");
+				if(filename==null | filename.trim().equals("")||filtername==null | filtername.trim().equals("")){
+					continue;
+				}
+				System.out.println("\tFound propset:"+ appName + " filename:" + filename + " filter:" + filtername);
+				Object[] array = new Object[3];
+				array[FILE_POS]=filename;
+				array[FILTER_POS]=filtername;
+				array[DATE_POS]=written;
+				list.add(array);
+			}
+			System.out.println();
+			closeConnection();
+			return list;
+		}
+		 
+		/**
+		 * Fetch and return the set of triples: {filename, filtername, write-date} for a given app name
+		 * that are newer than a given moment
+		 * @param appName
+		 * @param date
+		 * @return
+		 * @throws Exception
+		 */
+		public List<Object[]> fetchFileFilterTriplesFor(String appName, Date date) throws Exception { 
+			createConnection();
+			List<Object[]> list = new ArrayList<Object[]>();
+			SimpleDateFormat formatter = new SimpleDateFormat(format);
+			String dateStr = formatter.format(date); 
+			String query = "SELECT filename,filtername,written FROM "+ getTableName()+" where appkey='" + appName + "' and written >= '" + dateStr + "'";
+			ResultSet rs = executeQuery(query);
+			System.out.println();
+			while (rs.next()) { 
+				String filename = rs.getString("filename");
+				String filtername = rs.getString("filtername");
+				Date written = rs.getDate("written");
+				if(filename==null | filename.trim().equals("")||filtername==null | filtername.trim().equals("")){
+					continue;
+				}
+				System.out.println("\tFound propset:"+ appName + " filename:" + filename + " filter:" + filtername);
+				Object[] array = new Object[3];
+				array[FILE_POS]=filename;
+				array[FILTER_POS]=filtername;
+				array[DATE_POS]=written;
+				list.add(array);
+			}
+			System.out.println();
+			closeConnection();
+			return list;
+		}
+		/**
+		 * Delete a value from one properties set. This is called before insert.
+		 * 
+		 * @param appName
+		 * @param filename
+		 * @param filtername
+		 * @throws Exception
+		 */
+		public void delete(String appName, String filename, String filtername) throws Exception {
+			createConnection();
+			String stmt = "delete from "+getTableName()+" where appkey='"+appName+"' and filename='" + filename
+					+ "' and filtername = '" + filtername + "'";
+			System.out.println("stmt:" + stmt);
+			int ops = executeUpdate(stmt);
+			if (ops != 0 && ops != 1) {
+				log.warn("parameter insert found multiple copies of " + filename
+						+ " in " + appName + ". Copy count:" + ops);
+			}
+			closeConnection();
+		}
+
+		/**
+		 * Insert a single filename entry into the db for one application.
+		 * 
+		 * @param app
+		 * @param prop
+		 * @param value
+		 */
+		public void insert(String appKey, String fileName, String filterName) throws Exception {
+			delete(appKey, fileName,filterName);
+			createConnection(); 
+			SimpleDateFormat formatter = new SimpleDateFormat(format);
+			String dateStr = formatter.format(new java.util.Date()); 
+			String stmt = "INSERT INTO " + getTableName() + " VALUES (0,'" + appKey + "', '"
+					+ fileName + "', '" + filterName + "', '" + dateStr+"')";
+			System.out.println("stmt:" + stmt);
+			int ops = executeUpdate(stmt);
+			if (ops != 1) {
+				throw new Exception("Failed to insert a value!");
+			}
+			closeConnection();
+		}
+		
+	}
+ 
